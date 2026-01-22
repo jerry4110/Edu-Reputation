@@ -132,6 +132,8 @@ const App = () => {
   ];
 
   // --- TTS Core Function ---
+  // NOTE: TTS 기능은 현재 Gemini API에서 제한적이므로 일시적으로 비활성화
+  // 필요시 Web Speech API나 다른 TTS 서비스 사용 고려
   const fetchAudio = async (text, slideIndex) => {
     if (audioCache[slideIndex]) return audioCache[slideIndex];
     
@@ -141,12 +143,18 @@ const App = () => {
       return null;
     }
 
+    // TTS 기능 일시 비활성화 - NOT_FOUND 에러 방지
+    console.warn('TTS 기능이 현재 비활성화되어 있습니다. 텍스트만 표시됩니다.');
+    setIsAudioLoading(false);
+    return null;
+
+    // 아래 코드는 TTS 기능이 활성화될 때 사용
+    /*
     setIsAudioLoading(true);
     let delay = 1000;
     for (let i = 0; i < 5; i++) {
       try {
-        // Try using gemini-2.0-flash-exp for TTS (if available) or fallback to text-to-speech API
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -187,6 +195,7 @@ const App = () => {
         delay *= 2;
       }
     }
+    */
   };
 
   // --- Sync Control: Load and Play Audio for Current Slide ---
@@ -265,8 +274,8 @@ const App = () => {
     let delay = 1000;
     for (let i = 0; i < 5; i++) {
       try {
-        // Use stable model names: gemini-1.5-flash or gemini-1.5-pro
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
+        // Use stable model: gemini-1.5-pro (more reliable than flash)
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -294,9 +303,18 @@ const App = () => {
       } catch (e) {
         console.error(`AI API attempt ${i + 1} failed:`, e);
         if (i === 4) { 
-          const errorMsg = e.message?.includes('NOT_FOUND') 
-            ? "⚠️ 모델을 찾을 수 없습니다. API 키와 모델 이름을 확인해주세요." 
-            : `⚠️ 오류가 발생했습니다: ${e.message || '알 수 없는 오류'}`;
+          let errorMsg = "⚠️ 오류가 발생했습니다.";
+          
+          if (e.message?.includes('NOT_FOUND')) {
+            errorMsg = "⚠️ 모델을 찾을 수 없습니다. API 키가 올바르게 설정되었는지 확인해주세요.\n\nVercel 환경 변수에서 VITE_GEMINI_API_KEY가 설정되어 있는지 확인하세요.";
+          } else if (e.message?.includes('401') || e.message?.includes('UNAUTHENTICATED')) {
+            errorMsg = "⚠️ API 키 인증 실패. API 키가 유효한지 확인해주세요.";
+          } else if (e.message?.includes('403') || e.message?.includes('PERMISSION_DENIED')) {
+            errorMsg = "⚠️ API 접근 권한이 없습니다. API 키 권한을 확인해주세요.";
+          } else {
+            errorMsg = `⚠️ 오류가 발생했습니다: ${e.message || '알 수 없는 오류'}`;
+          }
+          
           setAiResponse(errorMsg); 
           setIsAiLoading(false); 
         }
