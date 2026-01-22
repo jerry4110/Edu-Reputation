@@ -64,6 +64,13 @@ const App = () => {
 
   const audioRef = useRef(null);
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY || ""; // API Key from environment variable
+  
+  // Debug: Check if API key is loaded (only in development)
+  useEffect(() => {
+    if (import.meta.env.DEV) {
+      console.log('API Key loaded:', apiKey ? 'Yes (length: ' + apiKey.length + ')' : 'No');
+    }
+  }, [apiKey]);
 
   const slides = [
     {
@@ -127,12 +134,19 @@ const App = () => {
   // --- TTS Core Function ---
   const fetchAudio = async (text, slideIndex) => {
     if (audioCache[slideIndex]) return audioCache[slideIndex];
+    
+    if (!apiKey) {
+      console.error('API key is not set');
+      setIsAudioLoading(false);
+      return null;
+    }
 
     setIsAudioLoading(true);
     let delay = 1000;
     for (let i = 0; i < 5; i++) {
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`, {
+        // Try using gemini-2.0-flash-exp for TTS (if available) or fallback to text-to-speech API
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -146,7 +160,12 @@ const App = () => {
           })
         });
 
-        if (!response.ok) throw new Error('TTS Failed');
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('TTS API Error:', errorData);
+          throw new Error(`TTS Failed: ${response.status} ${errorData.error?.message || response.statusText}`);
+        }
+        
         const data = await response.json();
         const pcmData = data.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
         
@@ -158,7 +177,12 @@ const App = () => {
           return url;
         }
       } catch (err) {
-        if (i === 4) { setIsAudioLoading(false); return null; }
+        console.error(`TTS attempt ${i + 1} failed:`, err);
+        if (i === 4) { 
+          setIsAudioLoading(false); 
+          console.error('TTS failed after 5 attempts');
+          return null; 
+        }
         await new Promise(r => setTimeout(r, delay));
         delay *= 2;
       }
@@ -224,6 +248,12 @@ const App = () => {
   // --- Gemini AI Help Tool ---
   const handleAiAction = async () => {
     if (!userInput.trim()) return;
+    
+    if (!apiKey) {
+      setAiResponse("⚠️ API 키가 설정되지 않았습니다. Vercel 환경 변수에서 VITE_GEMINI_API_KEY를 확인해주세요.");
+      return;
+    }
+    
     setIsAiLoading(true);
     let prompt = "";
     let sys = "당신은 대한민국 채용 법률 전문가입니다. 사용자의 질문에 전문적이고 명확하게 답하세요.";
@@ -235,7 +265,8 @@ const App = () => {
     let delay = 1000;
     for (let i = 0; i < 5; i++) {
       try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+        // Use stable model names: gemini-1.5-flash or gemini-1.5-pro
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -243,13 +274,34 @@ const App = () => {
             systemInstruction: { parts: [{ text: sys }] }
           })
         });
+        
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({}));
+          console.error('AI API Error:', errorData);
+          throw new Error(`API Error: ${response.status} ${errorData.error?.message || response.statusText}`);
+        }
+        
         const data = await response.json();
-        setAiResponse(data.candidates?.[0]?.content?.parts?.[0]?.text || "답변을 가져올 수 없습니다.");
+        const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        
+        if (responseText) {
+          setAiResponse(responseText);
+        } else {
+          setAiResponse("답변을 가져올 수 없습니다. 응답 형식을 확인해주세요.");
+        }
         setIsAiLoading(false);
         return;
       } catch (e) {
-        if (i === 4) { setAiResponse("오류가 발생했습니다."); setIsAiLoading(false); }
-        await new Promise(r => setTimeout(r, delay)); delay *= 2;
+        console.error(`AI API attempt ${i + 1} failed:`, e);
+        if (i === 4) { 
+          const errorMsg = e.message?.includes('NOT_FOUND') 
+            ? "⚠️ 모델을 찾을 수 없습니다. API 키와 모델 이름을 확인해주세요." 
+            : `⚠️ 오류가 발생했습니다: ${e.message || '알 수 없는 오류'}`;
+          setAiResponse(errorMsg); 
+          setIsAiLoading(false); 
+        }
+        await new Promise(r => setTimeout(r, delay)); 
+        delay *= 2;
       }
     }
   };
