@@ -55,6 +55,7 @@ const App = () => {
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const [audioDuration, setAudioDuration] = useState(0);
   const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const autoAdvanceTimerRef = useRef(null);
 
   // Gemini API States
   const [aiMode, setAiMode] = useState('analyze');
@@ -200,19 +201,44 @@ const App = () => {
 
   // --- Sync Control: Load and Play Audio for Current Slide ---
   useEffect(() => {
+    // 이전 타이머 정리
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+
     const syncAudioWithSlide = async () => {
       if (isPlaying && activeTab === 'video' && currentSlide < slides.length) {
         const url = await fetchAudio(slides[currentSlide].script, currentSlide);
         if (url && audioRef.current) {
+          // 오디오가 있으면 재생
           audioRef.current.src = url;
           audioRef.current.muted = isMuted;
           audioRef.current.play().catch(e => console.error("Auto-play blocked", e));
+        } else {
+          // TTS가 없을 때 자동으로 다음 슬라이드로 넘어가기 (5초 후)
+          autoAdvanceTimerRef.current = setTimeout(() => {
+            if (currentSlide < slides.length - 1) {
+              setCurrentSlide(prev => prev + 1);
+            } else {
+              setIsPlaying(false); // 모든 슬라이드 완료
+            }
+            autoAdvanceTimerRef.current = null;
+          }, 5000); // 5초 후 자동 전환
         }
       } else {
         audioRef.current?.pause();
       }
     };
     syncAudioWithSlide();
+
+    // Cleanup function
+    return () => {
+      if (autoAdvanceTimerRef.current) {
+        clearTimeout(autoAdvanceTimerRef.current);
+        autoAdvanceTimerRef.current = null;
+      }
+    };
   }, [currentSlide, isPlaying, activeTab]);
 
   // Handle Audio Events
