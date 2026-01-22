@@ -73,9 +73,44 @@ EDU-REPU/
    - 질문 생성기: 직무에 맞는 법적으로 안전한 평판조회 질문을 생성합니다
    - 법률 Q&A: 채용 관련 법률 질문에 답변합니다
 
+## Vercel 배포 가이드
+
+### 1. Vercel에 프로젝트 연결
+
+1. [Vercel](https://vercel.com)에 로그인
+2. "Add New Project" 클릭
+3. GitHub 저장소 선택 및 연결
+4. 프로젝트 설정 확인
+
+### 2. 환경 변수 설정 (중요!)
+
+Vercel 대시보드에서 환경 변수를 설정해야 합니다:
+
+1. 프로젝트 설정 → Environment Variables
+2. 다음 환경 변수 추가:
+   - **Key**: `VITE_GEMINI_API_KEY`
+   - **Value**: 발급받은 Gemini API 키
+3. Production, Preview, Development 모두에 적용
+
+### 3. 빌드 설정
+
+Vercel은 자동으로 Vite를 감지하지만, 다음 설정을 확인하세요:
+- **Framework Preset**: Vite
+- **Build Command**: `npm run build`
+- **Output Directory**: `dist`
+- **Install Command**: `npm install`
+
+### 4. 배포 후 확인
+
+배포가 완료되면:
+- 환경 변수가 제대로 설정되었는지 확인
+- 브라우저 콘솔에서 에러 확인
+- API 호출이 정상 작동하는지 테스트
+
 ## 주의사항
 
 - Gemini API 키가 필요합니다
+- **Vercel 배포 시 반드시 환경 변수를 설정해야 합니다** (`.env` 파일은 Git에 커밋되지 않음)
 - API 키는 환경 변수로 관리하는 것을 권장합니다
 - TTS 기능은 Gemini 2.5 Flash Preview TTS 모델을 사용합니다
 
